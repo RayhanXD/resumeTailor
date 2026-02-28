@@ -1,14 +1,13 @@
-# AI Resume & Cover Letter Agent
+# AI Cover Letter Agent
 
-A simple Next.js application that helps you tailor your resume and generate cover letters for any job description using Google's Gemini AI.
+A simple Next.js application that helps you generate cover letters for any job description using Google's Gemini AI.
 
 ## Features
 
 - **Resume Upload**: Upload your resume PDF once and store it in browser localStorage
-- **AI-Powered Tailoring**: Automatically tailor your resume to match job descriptions
 - **Cover Letter Generation**: Create personalized cover letters based on your resume and job requirements
 - **Dark Theme**: Clean, modern UI with dark theme
-- **Download & Copy**: Easy export options for generated documents
+- **Download & Copy**: Easy export options for generated cover letters
 
 ## Tech Stack
 
@@ -59,8 +58,8 @@ Open [http://localhost:3000](http://localhost:3000) to see the app.
 1. **Upload Resume**: Click to upload your resume PDF (one time)
 2. **Paste Job Description**: Copy and paste any job description into the textarea
 3. **Generate**: Click the "Generate" button
-4. **Get Results**: View your tailored resume and cover letter side by side
-5. **Export**: Copy to clipboard or download as text files
+4. **Get Results**: View your generated cover letter
+5. **Export**: Copy to clipboard or download as a text file
 
 ## Project Structure
 
@@ -84,9 +83,8 @@ lib/
 
 1. **PDF Parsing**: Uses `pdfjs-dist` to extract text from uploaded resume
 2. **Storage**: Resume text is stored in browser localStorage for persistence
-3. **AI Agent**: Gemini model with two tools:
-   - `tailorResume`: Matches resume to job description keywords and requirements
-   - `writeCoverLetter`: Generates personalized cover letter
+3. **AI Agent**: Gemini model with one generation tool:
+   - `writeCoverLetter`: Generates personalized cover letter using resume context and company research
 4. **API Route**: Next.js API route handles AI calls server-side
 5. **UI**: Clean interface with real-time updates and export options
 

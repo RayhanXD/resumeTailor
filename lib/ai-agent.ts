@@ -1,101 +1,120 @@
-import { google } from '@ai-sdk/google';
-import { generateText } from 'ai';
-import { researchCompany } from './research-company';
+import { generateText } from "ai";
+import { google } from "@ai-sdk/google";
 
-const model = google('gemini-2.0-flash');
+// ============================================================
+// MODEL
+// ============================================================
 
-/**
- * Tailors a resume to match a job description
- */
-async function tailorResume(resume: string, companyName: string, jobDescription: string): Promise<string> {
+const model = google("gemini-2.0-flash");
+
+// ============================================================
+// TOOLS
+// ============================================================
+
+async function researchCompany(companyName: string): Promise<string> {
+  console.log(`[Tool] Researching: ${companyName}`);
+
+  if (!process.env.SERPER_API_KEY) {
+    return "";
+  }
+
+  try {
+    const response = await fetch("https://google.serper.dev/search", {
+      method: "POST",
+      headers: {
+        "X-API-KEY": process.env.SERPER_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        q: `${companyName} company mission values culture`,
+        num: 5,
+      }),
+    });
+
+    if (!response.ok) return "";
+
+    const data = await response.json();
+    let info = "";
+
+    if (data.knowledgeGraph?.description) {
+      info += data.knowledgeGraph.description + "\n";
+    }
+
+    if (data.organic) {
+      for (const result of data.organic.slice(0, 3)) {
+        if (result.snippet) info += result.snippet + "\n";
+      }
+    }
+
+    return info;
+  } catch {
+    return "";
+  }
+}
+
+async function analyzeJob(jobDescription: string): Promise<string> {
+  console.log("[Tool] Analyzing job...");
+
   const result = await generateText({
     model,
-    prompt: `You are an expert resume writer. Given the following resume and job description for ${companyName}, create a tailored version of the resume that:
-
-1. Highlights relevant skills and experience that match the job requirements
-2. Uses keywords from the job description naturally
-3. Maintains the original resume's truthfulness (don't add fake experience)
-4. Keeps the same general structure but reorders/emphasizes relevant parts
-5. Uses action verbs and quantifiable achievements
-
-Original Resume:
-${resume}
-
-Company: ${companyName}
-
-Job Description:
-${jobDescription}
-
-Return ONLY the tailored resume text, formatted professionally.`,
+    prompt: `Extract key skills, responsibilities, and qualifications from this job description:\n\n${jobDescription}`,
   });
 
   return result.text;
 }
 
-/**
- * Writes a cover letter based on resume, job description, and company research
- */
 async function writeCoverLetter(
   resume: string,
   companyName: string,
-  jobDescription: string,
-  companyInfo: string
+  companyInfo: string,
+  jobAnalysis: string
 ): Promise<string> {
+  console.log("[Tool] Writing cover letter...");
+
   const result = await generateText({
     model,
-    prompt: `You are an expert cover letter writer. Given the following resume, job description, and company research for ${companyName}, write a compelling cover letter that:
+    prompt: `Write a 3-4 paragraph cover letter for ${companyName}.
 
-1. Is written in first person
-2. Shows genuine enthusiasm for the role and specifically for ${companyName}
-3. References specific things about the company (mission, values, culture, recent news) from the research provided
-4. Highlights 2-3 key experiences from the resume that directly relate to the job
-5. Explains why the candidate is a great fit for ${companyName}'s culture and mission
-6. Is professional but personable
-7. Is 3-4 paragraphs (not too long)
-8. Includes a strong opening that mentions something specific about the company
-
-Resume:
+RESUME:
 ${resume}
 
-Company: ${companyName}
+COMPANY INFO:
+${companyInfo || "Not available"}
 
-${companyInfo ? `Company Research:\n${companyInfo}\n` : ''}
+JOB REQUIREMENTS:
+${jobAnalysis}
 
-Job Description:
-${jobDescription}
-
-Return ONLY the cover letter text, ready to use. Do not include [Your Name], [Date], or address headers - just the letter body.`,
+Write in first person. Be professional but personable. Return only the letter body.`,
   });
 
   return result.text;
 }
 
-/**
- * Main agent function that generates both tailored resume and cover letter
- */
-export async function generateResumeAndCoverLetter(
+// ============================================================
+// AGENT
+// ============================================================
+
+export async function generateCoverLetter(
   resume: string,
   companyName: string,
   jobDescription: string
-): Promise<{ tailoredResume: string; coverLetter: string; companyInfo: string }> {
-  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    throw new Error('GOOGLE_GENERATIVE_AI_API_KEY is not set');
-  }
+): Promise<{ coverLetter: string; companyInfo: string }> {
+  console.log(`[Agent] Starting for ${companyName}`);
 
-  // Step 1: Research the company first
-  console.log(`Researching ${companyName}...`);
+  // Step 1: Research company
   const companyInfo = await researchCompany(companyName);
-  console.log('Company research complete:', companyInfo ? 'Found info' : 'No info found');
 
-  // Step 2: Generate both outputs in parallel (cover letter now uses company info)
-  const [tailoredResume, coverLetter] = await Promise.all([
-    tailorResume(resume, companyName, jobDescription),
-    writeCoverLetter(resume, companyName, jobDescription, companyInfo),
-  ]);
+  // Step 2: Analyze job
+  const jobAnalysis = await analyzeJob(jobDescription.slice(0, 4000));
 
-  return {
-    tailoredResume,
-    coverLetter,
+  // Step 3: Write cover letter
+  const coverLetter = await writeCoverLetter(
+    resume.slice(0, 4000),
+    companyName,
     companyInfo,
-  };
+    jobAnalysis
+  );
+
+  console.log("[Agent] Complete");
+  return { coverLetter, companyInfo };
 }

@@ -1,5 +1,5 @@
-import { generateResumeAndCoverLetter } from '@/lib/ai-agent';
-import { NextRequest, NextResponse } from 'next/server';
+import { generateCoverLetter } from "@/lib/ai-agent";
+import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,19 +8,26 @@ export async function POST(request: NextRequest) {
 
     if (!resume || !companyName || !jobDescription) {
       return NextResponse.json(
-        { error: 'Resume, company name, and job description are required' },
-        { status: 400 }
+        { error: "Resume, company name, and job description are required" },
+        { status: 400 },
       );
     }
-
-    const result = await generateResumeAndCoverLetter(resume, companyName, jobDescription);
+    //TODO: HMMM.... Myabe this function is important... Try cntrl + clicking it?
+    const result = await generateCoverLetter(
+      resume,
+      companyName,
+      jobDescription,
+    );
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Error generating content:', error);
+    console.error("Error generating content:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to generate content' },
-      { status: 500 }
+      {
+        error:
+          error instanceof Error ? error.message : "Failed to generate content",
+      },
+      { status: 500 },
     );
   }
 }

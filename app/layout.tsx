@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Resume & Cover Letter Agent",
-  description: "AI-powered resume tailoring and cover letter generation",
+  title: "Cover Letter Agent",
+  description: "AI-powered cover letter generation",
 };
 
 export default function RootLayout({
