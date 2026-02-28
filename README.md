@@ -104,6 +104,14 @@ What this project covers:
 - shadcn/ui component usage
 - Vercel AI SDK integration
 
+### Getting Started with the Workshop
+
+1. **Choose your difficulty level**: Look in the `agent-versions/` folder and pick either the **easy** or **medium** version depending on your experience level.
+
+2. **Set up your agent file**: Copy your chosen file into the `lib/` folder and rename it to `ai-agent.ts`.
+
+3. **Update imports if needed**: You may need to update the import in `app/api/generate/route.ts` to point to your new file.
+
 ### Where to Look
 
 To complete the workshop assignment, focus on these key files:

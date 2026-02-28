@@ -62,18 +62,16 @@ async function researchCompany(companyName: string): Promise<string> {
   }
 }
 
-//TODO: Write this function so that it will return, using the generateText function, key insigts from jobDescription
+//TODO: Write this function so that it will return, using the generateText function, key insigts from jobDescription. use: https://ai-sdk.dev/docs/ai-sdk-core/generating-text 
 
 async function analyzeJob(jobDescription: string): Promise<string> {
   console.log("[Tool] Analyzing job...");
+  
 
-  const result = await generateText({
-    model,
-    prompt: `Extract key skills, responsibilities, and qualifications from this job description:\n\n${jobDescription}`,
-  });
 
-  return result.text;
 }
+
+
 
 // ============================================================
 // AGENT
@@ -86,59 +84,46 @@ export async function generateCoverLetter(
 ): Promise<{ coverLetter: string; companyInfo: string }> {
   console.log(`[Agent] Starting for ${companyName}`);
 
-  // Keep per-request tool results local so concurrent requests do not share state.
   let companyInfo = "";
+
+  // Create a coverLetterAgent using the ToolLoopAgent from the ai sdk.
 
   const coverLetterAgent = new ToolLoopAgent({
     model,
+    // Edit these as you see fit !!!
     instructions: `You are an expert cover letter writer.
 Use available tools whenever they help you produce a stronger, better-grounded cover letter.
 In normal cases, gather company context and job requirement analysis before writing.
 Write a 3-4 paragraph cover letter in first person.
 Be professional but personable.
 Return only the letter body.`,
-    tools: {
-      researchCompany: tool({
-        description:
-          "Research a company's mission, culture, values, and public positioning.",
-        inputSchema: z.object({
-          companyName: z.string().describe("The company to research"),
-        }),
-        execute: async ({ companyName }) => {
-          const info = await researchCompany(companyName);
-          companyInfo = info;
-          return { companyInfo: info || "Not available" };
-        },
-      }),
-      analyzeJob: tool({
-        description:
-          "Extract key skills, responsibilities, and qualifications from a job description.",
-        inputSchema: z.object({
-          jobDescription: z
-            .string()
-            .describe("Raw job description text to analyze"),
-        }),
-        execute: async ({ jobDescription }) => {
-          const analysis = await analyzeJob(jobDescription);
-          return { jobAnalysis: analysis };
-        },
-      }),
-    },
   });
 
+  // Write the following tools (resource: https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling)
+    tools: {
+      // shoudl include a description, inputSchema, and and execute attribute that takes in company name, calls researchCompany(companyName), saves that into companyInfo variable defined earlier and returns companyInfo
+      researchCompany: tool({
+
+         execute: async ({ companyName }) => {
+
+          return { companyInfo: info || "Not available" };
+         },
+      }),
+      //TODO write the tool for analyzeJob: 
+      analyzeJob: tool({
+        
+        execute: async ({ jobDescription }) => {
+          // Missing a line here!
+          return { jobAnalysis: analysis };
+         },
+      }),
+    };
+
+    
   const result = await coverLetterAgent.generate({
-    prompt: `Create a cover letter for ${companyName}.
+    // TODO Write a prompt whcih will give the agent the relevent context (company name, resume, jobDescription and ask it to create a cover letter!)
+    prompt: `Create a cover letter for ${resume.slice(0,5000)}`
 
-RESUME:
-${resume.slice(0, 4000)}
-
-COMPANY NAME:
-${companyName}
-
-JOB DESCRIPTION:
-${jobDescription.slice(0, 4000)}
-
-Produce the best possible cover letter.`,
   });
 
   console.log("[Agent] Complete");
