@@ -1,36 +1,104 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Resume & Cover Letter Agent
+
+A simple Next.js application that helps you tailor your resume and generate cover letters for any job description using Google's Gemini AI.
+
+## Features
+
+- **Resume Upload**: Upload your resume PDF once and store it in browser localStorage
+- **AI-Powered Tailoring**: Automatically tailor your resume to match job descriptions
+- **Cover Letter Generation**: Create personalized cover letters based on your resume and job requirements
+- **Dark Theme**: Clean, modern UI with dark theme
+- **Download & Copy**: Easy export options for generated documents
+
+## Tech Stack
+
+- **Next.js 15** - React framework with App Router
+- **TypeScript** - Type safety
+- **Tailwind CSS** - Styling
+- **shadcn/ui** - UI components
+- **Gemini AI** - AI agent with tool-based architecture
+- **pdfjs-dist** - PDF text extraction
+- **Vercel AI SDK** - AI integration
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- npm or yarn
+- Google AI API key ([Get one here](https://makersuite.google.com/app/apikey))
+
+### Installation
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Create a `.env.local` file:
+   ```bash
+   cp .env.local.example .env.local
+   ```
+
+4. Add your Google AI API key to `.env.local`:
+   ```
+   GOOGLE_GENERATIVE_AI_API_KEY=your_api_key_here
+   ```
+
+### Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to see the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## How to Use
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Upload Resume**: Click to upload your resume PDF (one time)
+2. **Paste Job Description**: Copy and paste any job description into the textarea
+3. **Generate**: Click the "Generate" button
+4. **Get Results**: View your tailored resume and cover letter side by side
+5. **Export**: Copy to clipboard or download as text files
 
-## Learn More
+## Project Structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+app/
+  page.tsx                  # Main UI
+  api/generate/route.ts     # API endpoint for AI generation
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+components/
+  upload-zone.tsx           # Resume upload component
+  output-panel.tsx          # Output display with copy/download
+  ui/                       # shadcn components
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+lib/
+  utils.ts                  # shadcn utilities
+  pdf-parser.ts             # PDF text extraction
+  ai-agent.ts               # Gemini AI agent with tools
+```
 
-## Deploy on Vercel
+## How It Works
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. **PDF Parsing**: Uses `pdfjs-dist` to extract text from uploaded resume
+2. **Storage**: Resume text is stored in browser localStorage for persistence
+3. **AI Agent**: Gemini model with two tools:
+   - `tailorResume`: Matches resume to job description keywords and requirements
+   - `writeCoverLetter`: Generates personalized cover letter
+4. **API Route**: Next.js API route handles AI calls server-side
+5. **UI**: Clean interface with real-time updates and export options
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Workshop Notes
+
+This project is designed as a 1-2 hour workshop demonstrating:
+- File handling in Next.js
+- AI agent architecture with tools
+- localStorage for session persistence
+- shadcn/ui component usage
+- Vercel AI SDK integration
+
+## License
+
+MIT
