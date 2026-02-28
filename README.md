@@ -31,19 +31,25 @@ A simple Next.js application that helps you generate cover letters for any job d
 
 1. Clone the repository
 2. Install dependencies:
+
    ```bash
    npm install
    ```
 
 3. Create a `.env.local` file:
+
    ```bash
    cp .env.local.example .env.local
    ```
 
-4. Add your Google AI API key to `.env.local`:
+4. Add your API keys to `.env.local`:
    ```
    GOOGLE_GENERATIVE_AI_API_KEY=your_api_key_here
+   SERPER_API_KEY=your_serper_api_key_here
    ```
+
+   - Get a Google AI API key [here](https://makersuite.google.com/app/apikey)
+   - Get a Serper API key [here](https://serper.dev/) (used for company research)
 
 ### Run Development Server
 
@@ -90,7 +96,8 @@ lib/
 
 ## Workshop Notes
 
-This project is designed as a 1-2 hour workshop demonstrating:
+What this project covers:
+
 - File handling in Next.js
 - AI agent architecture with tools
 - localStorage for session persistence
@@ -106,6 +113,8 @@ To complete the workshop assignment, focus on these key files:
 2. **`app/api/generate/route.ts`** - The API endpoint that receives requests and calls the AI agent. See how the backend processes requests.
 
 3. **`lib/ai-agent.ts`** - **This is where most of your work will be.** This file contains the AI agent logic, tools, and prompts. You'll modify this file to customize the agent's behavior and capabilities.
+
+4. **`.env.local`** - Make sure to add your `SERPER_API_KEY` here to enable the company research tool.
 
 ### Helpful Resources
 
