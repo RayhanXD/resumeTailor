@@ -149,6 +149,44 @@ matchSkills: tool({
   },
 })
 ```
+
+**2. Company Culture Extractor**
+
+Add an `extractCompanyValues` tool that summarizes a company’s mission, values, and culture from research results before generating the final cover letter.
+
+This tool allows the agent to:
+- Analyze company research gathered via Serper
+- Identify key themes such as mission, culture, and priorities
+- Extract 3–5 core values or focus areas
+- Use that insight to personalize the cover letter beyond just skills
+
+```ts
+extractCompanyValues: tool({
+  description: "Summarize a company's mission, values, and culture from research text.",
+  inputSchema: z.object({
+    companyResearch: z.string(),
+  }),
+  execute: async ({ companyResearch }) => {
+    const result = await generateText({
+      model,
+      prompt: `
+Summarize the company's mission, culture, and core values from the research below.
+
+Research:
+${companyResearch}
+
+Return:
+1. Key mission/themes
+2. Cultural values
+3. 2-3 points that should be referenced in a cover letter
+`,
+    });
+
+    return { companyInsights: result.text };
+  },
+})
+```
+
 ## License
 
 MIT
