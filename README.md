@@ -132,7 +132,6 @@ These documentation links will help you complete the assignment:
 - [Tools and Tool Calling](https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling) - Learn how to define and use tools with AI agents
 
 ## Some cool ideas to add !
-### Some cool ideas to add
 
 **1. Resume Job App Matcher**
 Add a `matchSkills` tool that compares the candidate's resume skills to the extracted job requirements and returns a gap analysis. Example below:
