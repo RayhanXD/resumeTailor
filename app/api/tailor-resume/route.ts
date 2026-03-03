@@ -2,89 +2,83 @@ import { NextRequest, NextResponse } from "next/server";
 import { resumeTailorGraph } from "@/lib/graph/resume-tailor-graph";
 import { reconstructLatex } from "@/lib/latex/reconstruct";
 
-const MAX_LATEX_LENGTH = 50_000;
-const MAX_JOB_DESC_LENGTH = 30_000;
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { latex, jobDescription, companyName } = body;
+    const latex = String(body?.latex ?? "");
+    const jobDescription = String(body?.jobDescription ?? "");
+    const companyName = String(body?.companyName ?? "");
 
-    if (!latex || typeof latex !== "string") {
+    if (!latex.trim() || !jobDescription.trim()) {
       return NextResponse.json(
-        { error: "latex is required and must be a string" },
+        { error: "latex and jobDescription are required" },
         { status: 400 },
       );
     }
 
-    if (!jobDescription || typeof jobDescription !== "string") {
-      return NextResponse.json(
-        { error: "jobDescription is required and must be a string" },
-        { status: 400 },
-      );
-    }
-
-    const trimmedLatex = latex.slice(0, MAX_LATEX_LENGTH).trim();
-    const trimmedJobDesc = jobDescription.slice(0, MAX_JOB_DESC_LENGTH).trim();
-    const company = typeof companyName === "string" ? companyName.trim() : "";
-
-    const initialState = {
-      latex: trimmedLatex,
-      jobDescription: trimmedJobDesc,
-      companyName: company,
+    const finalState = await resumeTailorGraph.invoke({
+      latex,
+      jobDescription,
+      companyName,
       companyResearch: "",
+      parsedResume: undefined as never,
       jobAnalysis: "",
       recruiterLens: "",
-      parsedResume: undefined,
-      tailoredBullets: [] as string[],
-      tailoredSkillsLine: undefined as string | undefined,
-      critique: undefined as string | undefined,
+      tailoredBullets: [],
+      tailoredSkillsValues: [],
+      critique: "",
       done: false,
-    };
-
-    const finalState = await resumeTailorGraph.invoke(initialState);
+    });
 
     const parsed = finalState.parsedResume;
-    const tailoredBullets = finalState.tailoredBullets ?? [];
-    const tailoredSkillsLine = finalState.tailoredSkillsLine;
-
     if (!parsed) {
-      return NextResponse.json(
-        { error: "Failed to parse LaTeX resume. Ensure it contains \\item blocks." },
-        { status: 500 },
-      );
+      throw new Error("Unable to parse resume structure.");
     }
 
     const tailoredLatex = reconstructLatex(
-      trimmedLatex,
+      latex,
       parsed,
-      tailoredBullets,
-      tailoredSkillsLine,
+      finalState.tailoredBullets,
+      finalState.tailoredSkillsValues,
     );
 
-    const includeDebug = process.env.DEBUG_TAILOR_RESPONSE === "true";
-    const response: {
-      tailoredLatex: string;
-      debug?: {
-        jobAnalysis: string;
-        recruiterLens: string;
-        companyResearch: string;
-        critique?: string;
-      };
-    } = { tailoredLatex };
-
-    if (includeDebug) {
-      response.debug = {
-        jobAnalysis: finalState.jobAnalysis ?? "",
-        recruiterLens: finalState.recruiterLens ?? "",
-        companyResearch: finalState.companyResearch ?? "",
-        critique: finalState.critique,
-      };
+    const preambleEnd =
+      latex.indexOf("\\begin{document}") + "\\begin{document}".length;
+    const postambleStart = latex.lastIndexOf("\\end{document}");
+    const inputPreamble = latex.slice(0, preambleEnd);
+    const outputPreamble = tailoredLatex.slice(0, preambleEnd);
+    const inputPostamble = latex.slice(postambleStart);
+    const outputPostamble = tailoredLatex.slice(
+      tailoredLatex.lastIndexOf("\\end{document}"),
+    );
+    if (
+      inputPreamble !== outputPreamble ||
+      inputPostamble !== outputPostamble
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Format verification failed: preamble or postamble was modified. Returning original.",
+          tailoredLatex: latex,
+        },
+        { status: 200 },
+      );
     }
 
-    return NextResponse.json(response);
+    const includeDebug = process.env.DEBUG_TAILOR_RESPONSE === "true";
+    return NextResponse.json({
+      tailoredLatex,
+      ...(includeDebug
+        ? {
+            debug: {
+              critique: finalState.critique,
+              jobAnalysis: finalState.jobAnalysis,
+              recruiterLens: finalState.recruiterLens,
+            },
+          }
+        : {}),
+    });
   } catch (error) {
-    console.error("Error tailoring resume:", error);
     return NextResponse.json(
       {
         error:

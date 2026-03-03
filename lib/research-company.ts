@@ -1,15 +1,6 @@
-/**
- * Serper-based company research. Reused by the LangGraph research_company node.
- */
 export async function researchCompany(companyName: string): Promise<string> {
-  console.log(`[Research] Company: ${companyName}`);
-
-  if (!companyName?.trim()) return "";
-
-  if (!process.env.SERPER_API_KEY) {
-    console.warn("[Research] SERPER_API_KEY not set, skipping company research");
-    return "";
-  }
+  if (!companyName.trim()) return "";
+  if (!process.env.SERPER_API_KEY) return "";
 
   try {
     const response = await fetch("https://google.serper.dev/search", {
@@ -30,19 +21,15 @@ export async function researchCompany(companyName: string): Promise<string> {
       knowledgeGraph?: { description?: string };
       organic?: Array<{ snippet?: string }>;
     };
-    let info = "";
 
+    const lines: string[] = [];
     if (data.knowledgeGraph?.description) {
-      info += data.knowledgeGraph.description + "\n";
+      lines.push(data.knowledgeGraph.description);
     }
-
-    if (data.organic) {
-      for (const result of data.organic.slice(0, 3)) {
-        if (result.snippet) info += result.snippet + "\n";
-      }
+    for (const result of data.organic?.slice(0, 3) ?? []) {
+      if (result.snippet) lines.push(result.snippet);
     }
-
-    return info.trim();
+    return lines.join("\n").trim();
   } catch {
     return "";
   }

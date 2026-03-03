@@ -1,42 +1,61 @@
 import type { ParsedResume } from "./parse";
 
-/**
- * Reconstruct LaTeX by replacing original bullet texts and skills line
- * with tailored versions, preserving exact structure.
- * Process from end to start so string indices remain valid.
- */
+function replaceRanges(
+  source: string,
+  pairs: Array<{ start: number; end: number; value: string }>,
+): string {
+  const sorted = [...pairs].sort((a, b) => b.start - a.start);
+  let out = source;
+  for (const p of sorted) {
+    out = out.slice(0, p.start) + p.value + out.slice(p.end);
+  }
+  return out;
+}
+
+function normalizeOneLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+export function enforceOnePageHeuristic(
+  bullets: string[],
+  maxCharsPerBullet = 145,
+): string[] {
+  return bullets.map((b) => {
+    const clean = normalizeOneLine(b);
+    if (clean.length <= maxCharsPerBullet) return clean;
+    return clean.slice(0, maxCharsPerBullet - 1).trimEnd() + "…";
+  });
+}
+
 export function reconstructLatex(
   originalLatex: string,
-  parsedResume: ParsedResume,
+  parsed: ParsedResume,
   tailoredBullets: string[],
-  tailoredSkillsLine?: string,
+  tailoredSkillsValues: string[],
 ): string {
-  let result = originalLatex;
-
-  // Replace bullets from end to start to preserve indices
-  const ranges = [...parsedResume.structureMeta.bulletRanges].reverse();
-  const bullets = [...tailoredBullets].reverse();
-  if (ranges.length !== bullets.length) {
-    console.warn(
-      `[Reconstruct] Bullet count mismatch: ${ranges.length} ranges vs ${tailoredBullets.length} tailored. Using min.`,
+  if (tailoredBullets.length !== parsed.bulletRanges.length) {
+    throw new Error(
+      `Bullet count mismatch: expected ${parsed.bulletRanges.length}, got ${tailoredBullets.length}`,
     );
   }
-  const count = Math.min(ranges.length, bullets.length);
-  for (let i = 0; i < count; i++) {
-    const { start, end } = ranges[i];
-    const newText = bullets[i] ?? ranges[i].originalText;
-    result = result.slice(0, start) + newText + result.slice(end);
+  if (tailoredSkillsValues.length !== parsed.skillsRanges.length) {
+    throw new Error(
+      `Skills count mismatch: expected ${parsed.skillsRanges.length}, got ${tailoredSkillsValues.length}`,
+    );
   }
 
-  // Replace skills line if present
-  if (
-    parsedResume.structureMeta.skillsRange &&
-    tailoredSkillsLine !== undefined &&
-    tailoredSkillsLine !== ""
-  ) {
-    const { start, end } = parsedResume.structureMeta.skillsRange;
-    result = result.slice(0, start) + tailoredSkillsLine + result.slice(end);
-  }
+  const guardedBullets = enforceOnePageHeuristic(tailoredBullets);
 
-  return result;
+  const bulletPairs = parsed.bulletRanges.map((r, i) => ({
+    start: r.start,
+    end: r.end,
+    value: guardedBullets[i],
+  }));
+  const skillsPairs = parsed.skillsRanges.map((r, i) => ({
+    start: r.start,
+    end: r.end,
+    value: normalizeOneLine(tailoredSkillsValues[i]),
+  }));
+
+  return replaceRanges(originalLatex, [...bulletPairs, ...skillsPairs]);
 }

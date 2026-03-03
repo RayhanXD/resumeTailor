@@ -1,212 +1,197 @@
-import {
-  Annotation,
-  StateGraph,
-  START,
-  END,
-} from "@langchain/langgraph";
+import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { getResumeModel } from "@/lib/models";
-import { researchCompany } from "@/lib/research-company";
 import { parseLatexResume, type ParsedResume } from "@/lib/latex/parse";
+import { researchCompany } from "@/lib/research-company";
+import { enforceOnePageHeuristic } from "@/lib/latex/reconstruct";
 
-// ============================================================
-// STATE
-// ============================================================
+function contentToString(content: unknown): string {
+  if (typeof content === "string") return content;
+  return JSON.stringify(content);
+}
 
-const ResumeTailorState = Annotation.Root({
+const ResumeState = Annotation.Root({
   latex: Annotation<string>(),
-  jobDescription: Annotation<string>(),
   companyName: Annotation<string>(),
+  jobDescription: Annotation<string>(),
   companyResearch: Annotation<string>(),
+  parsedResume: Annotation<ParsedResume>(),
   jobAnalysis: Annotation<string>(),
   recruiterLens: Annotation<string>(),
-  parsedResume: Annotation<ParsedResume | undefined>(),
   tailoredBullets: Annotation<string[]>(),
-  tailoredSkillsLine: Annotation<string | undefined>(),
-  critique: Annotation<string | undefined>(),
+  tailoredSkillsValues: Annotation<string[]>(),
+  critique: Annotation<string>(),
   done: Annotation<boolean>(),
 });
 
-export type ResumeTailorStateType = typeof ResumeTailorState.State;
+export type ResumeStateType = typeof ResumeState.State;
 
-// ============================================================
-// NODES
-// ============================================================
-
-function parseInputsNode(
-  state: ResumeTailorStateType,
-): Partial<ResumeTailorStateType> {
+async function parseInputsNode(
+  state: ResumeStateType,
+): Promise<Partial<ResumeStateType>> {
   const parsed = parseLatexResume(state.latex);
+  if (parsed.bulletRanges.length === 0) {
+    throw new Error(
+      "No \\resumeItem{...} entries found. This formatter only edits \\resumeItem entries.",
+    );
+  }
   return { parsedResume: parsed };
 }
 
 async function researchCompanyNode(
-  state: ResumeTailorStateType,
-): Promise<Partial<ResumeTailorStateType>> {
-  if (!state.companyName?.trim()) {
-    return { companyResearch: "" };
-  }
-  const info = await researchCompany(state.companyName);
-  return { companyResearch: info };
+  state: ResumeStateType,
+): Promise<Partial<ResumeStateType>> {
+  if (!state.companyName?.trim()) return { companyResearch: "" };
+  return { companyResearch: await researchCompany(state.companyName) };
 }
 
 async function analyzeJobNode(
-  state: ResumeTailorStateType,
-): Promise<Partial<ResumeTailorStateType>> {
+  state: ResumeStateType,
+): Promise<Partial<ResumeStateType>> {
   const model = getResumeModel();
-  const { content } = await model.invoke([
+  const resp = await model.invoke([
     new SystemMessage(
-      "Extract key skills, responsibilities, qualifications, and must-haves from the job description. Be concise and structured.",
+      "Extract key hard skills, responsibilities, required experience level, and must-have keywords from this job description. Be concise.",
     ),
-    new HumanMessage(state.jobDescription.slice(0, 8000)),
+    new HumanMessage(state.jobDescription),
   ]);
-  const text = typeof content === "string" ? content : String(content);
-  return { jobAnalysis: text };
+  return { jobAnalysis: contentToString(resp.content) };
 }
 
 async function recruiterLensNode(
-  state: ResumeTailorStateType,
-): Promise<Partial<ResumeTailorStateType>> {
+  state: ResumeStateType,
+): Promise<Partial<ResumeStateType>> {
   const model = getResumeModel();
-  const { content } = await model.invoke([
+  const resp = await model.invoke([
     new SystemMessage(
-      "What would a recruiter or hiring manager screen for in this role? List keywords, experience signals, and potential red flags. Be concise.",
+      "You are a technical recruiter. Identify screening signals, red flags, and language to emphasize for interviews.",
     ),
     new HumanMessage(
-      `Job description:\n${state.jobDescription.slice(0, 4000)}\n\nJob analysis:\n${state.jobAnalysis?.slice(0, 2000) ?? ""}`,
+      `Job description:\n${state.jobDescription}\n\nJob analysis:\n${state.jobAnalysis}`,
     ),
   ]);
-  const text = typeof content === "string" ? content : String(content);
-  return { recruiterLens: text };
+  return { recruiterLens: contentToString(resp.content) };
 }
 
 async function tailorResumeNode(
-  state: ResumeTailorStateType,
-): Promise<Partial<ResumeTailorStateType>> {
+  state: ResumeStateType,
+): Promise<Partial<ResumeStateType>> {
   const parsed = state.parsedResume;
-  if (!parsed || parsed.bullets.length === 0) {
-    return { tailoredBullets: [], tailoredSkillsLine: undefined };
-  }
-
   const model = getResumeModel();
-  const bulletsText = parsed.bullets
-    .map((b, i) => `[${i + 1}] ${b}`)
+
+  const bullets = parsed.bullets.map((b, i) => `${i + 1}. ${b}`).join("\n");
+  const skills = parsed.skillsValues
+    .map((s, i) => `${i + 1}. ${s}`)
     .join("\n");
-  const skillsText = parsed.skillsLine ?? "(none)";
 
-  const prompt = `You are an expert resume writer. Rewrite the resume bullet points and technical skills to match this job. 
-
-RULES:
-- Use XYZ format: Accomplished [X] as measured by [Y] by doing [Z]
-- No buzzwords (synergy, leverage, drive, spearhead, etc.)
-- Don't overclaim or exaggerate; stay truthful but impactful
-- Prefer lines within 76-80 characters when possible
-- Keep technical skills line relevant to the job; reorder or add job-relevant skills if needed
-- Return ONLY the rewritten content, no explanation
-
-Job analysis:
-${state.jobAnalysis?.slice(0, 2000) ?? ""}
-
-Recruiter lens (what they look for):
-${state.recruiterLens?.slice(0, 1000) ?? ""}
-
-Company context:
-${state.companyResearch?.slice(0, 500) ?? "Not available"}
-
-ORIGINAL BULLETS:
-${bulletsText}
-
-ORIGINAL TECHNICAL SKILLS:
-${skillsText}
-
-Return your response in this exact JSON format (no markdown, no code fences):
-{"bullets": ["bullet1", "bullet2", ...], "skillsLine": "Skill1, Skill2, ..."}
-
-If skillsLine was "(none)", return the skillsLine as empty string "".`;
-
-  const { content } = await model.invoke([
-    new SystemMessage("You output valid JSON only. No other text."),
-    new HumanMessage(prompt),
+  const resp = await model.invoke([
+    new SystemMessage(
+      "Return valid JSON only. Do not include markdown fences.",
+    ),
+    new HumanMessage(
+      `Tailor ONLY the provided resume bullet text and technical-skills values.\n` +
+        `Do NOT write LaTeX.\n` +
+        `Do NOT add or remove list items.\n` +
+        `Keep facts truthful and non-exaggerated.\n` +
+        `Prefer concise bullets to fit one page.\n` +
+        `Use XYZ-style outcomes when supported by evidence.\n\n` +
+        `Job analysis:\n${state.jobAnalysis}\n\n` +
+        `Recruiter lens:\n${state.recruiterLens}\n\n` +
+        `Company context:\n${state.companyResearch || "N/A"}\n\n` +
+        `Original bullets (${parsed.bullets.length}):\n${bullets}\n\n` +
+        `Original skill values (${parsed.skillsValues.length}):\n${skills || "none"}\n\n` +
+        `Return JSON exactly:\n` +
+        `{"bullets":["..."],"skillsValues":["..."]}`,
+    ),
   ]);
-  const text = typeof content === "string" ? content : String(content);
-  const cleaned = text.replace(/^```\w*\n?/, "").replace(/\n?```$/, "").trim();
 
-  let bullets: string[];
-  let skillsLine: string | undefined;
+  const raw = contentToString(resp.content)
+    .replace(/^```json\s*/i, "")
+    .replace(/^```/, "")
+    .replace(/```$/, "")
+    .trim();
+
+  let tailoredBullets = [...parsed.bullets];
+  let tailoredSkillsValues = [...parsed.skillsValues];
+
   try {
-    const parsed = JSON.parse(cleaned) as { bullets?: string[]; skillsLine?: string };
-    bullets = Array.isArray(parsed.bullets) ? parsed.bullets : [];
-    skillsLine = typeof parsed.skillsLine === "string" ? parsed.skillsLine : undefined;
+    const parsedJson = JSON.parse(raw) as {
+      bullets?: unknown;
+      skillsValues?: unknown;
+    };
+    if (Array.isArray(parsedJson.bullets)) {
+      const list = parsedJson.bullets.map((x) => String(x).trim());
+      if (list.length === tailoredBullets.length) tailoredBullets = list;
+    }
+    if (Array.isArray(parsedJson.skillsValues)) {
+      const list = parsedJson.skillsValues.map((x) => String(x).trim());
+      if (list.length === tailoredSkillsValues.length) tailoredSkillsValues = list;
+    }
   } catch {
-    // Fallback: treat as raw bullets, one per line
-    bullets = cleaned
-      .split(/\n+/)
-      .map((s) => s.replace(/^[-*]\s*/, "").trim())
-      .filter(Boolean);
-    skillsLine = parsed.skillsLine;
+    // Keep originals if parsing fails.
   }
 
-  // Ensure we have same count as original
-  const originalCount = state.parsedResume!.bullets.length;
-  if (bullets.length !== originalCount) {
-    const padding = bullets.length < originalCount
-      ? Array(originalCount - bullets.length).fill("")
-      : [];
-    bullets = [...bullets.slice(0, originalCount), ...padding].slice(0, originalCount);
-  }
+  return { tailoredBullets, tailoredSkillsValues };
+}
 
-  return { tailoredBullets: bullets, tailoredSkillsLine: skillsLine ?? undefined };
+async function onePageGuardNode(
+  state: ResumeStateType,
+): Promise<Partial<ResumeStateType>> {
+  const compressed = enforceOnePageHeuristic(state.tailoredBullets, 140);
+  return { tailoredBullets: compressed };
 }
 
 async function criticNode(
-  state: ResumeTailorStateType,
-): Promise<Partial<ResumeTailorStateType>> {
+  state: ResumeStateType,
+): Promise<Partial<ResumeStateType>> {
   const model = getResumeModel();
-  const { content } = await model.invoke([
+  const resp = await model.invoke([
     new SystemMessage(
-      "You evaluate resume tailoring quality. Return a JSON object with: critique (short feedback), done (boolean). Set done=true only if the tailored bullets align well with the job, use XYZ format, avoid buzzwords, and sound professional. Set done=false if significant improvements are needed.",
+      "You are a strict quality gate. Return JSON with fields done(boolean) and critique(string). done=true only if bullets are role-aligned, concise, and truthful.",
     ),
     new HumanMessage(
-      `Job analysis:\n${state.jobAnalysis?.slice(0, 1500)}\n\nRecruiter lens:\n${state.recruiterLens?.slice(0, 800)}\n\nOriginal bullets:\n${state.parsedResume?.bullets?.join("\n") ?? ""}\n\nTailored bullets:\n${state.tailoredBullets?.join("\n") ?? ""}`,
+      `Job analysis:\n${state.jobAnalysis}\n\n` +
+        `Tailored bullets:\n${state.tailoredBullets.join("\n")}`,
     ),
   ]);
-  const text = typeof content === "string" ? content : String(content);
-  const cleaned = text.replace(/^```\w*\n?/, "").replace(/\n?```$/, "").trim();
 
-  let done = true;
-  let critique = "Accepted.";
+  const raw = contentToString(resp.content)
+    .replace(/^```json\s*/i, "")
+    .replace(/^```/, "")
+    .replace(/```$/, "")
+    .trim();
+
   try {
-    const parsed = JSON.parse(cleaned) as { done?: boolean; critique?: string };
-    done = parsed.done !== false;
-    critique = typeof parsed.critique === "string" ? parsed.critique : critique;
+    const obj = JSON.parse(raw) as { done?: boolean; critique?: string };
+    return {
+      done: Boolean(obj.done),
+      critique: obj.critique ?? "",
+    };
   } catch {
-    // Default to done to avoid infinite loop
+    return { done: true, critique: "Accepted by fallback parser." };
   }
-
-  return { critique, done };
 }
 
-// ============================================================
-// GRAPH
-// ============================================================
-
-const graphBuilder = new StateGraph(ResumeTailorState)
+const graph = new StateGraph(ResumeState)
   .addNode("parse_inputs", parseInputsNode)
   .addNode("research_company", researchCompanyNode)
   .addNode("analyze_job", analyzeJobNode)
   .addNode("recruiter_lens", recruiterLensNode)
   .addNode("tailor_resume", tailorResumeNode)
+  .addNode("one_page_guard", onePageGuardNode)
   .addNode("critic", criticNode)
   .addEdge(START, "parse_inputs")
   .addEdge("parse_inputs", "research_company")
   .addEdge("research_company", "analyze_job")
   .addEdge("analyze_job", "recruiter_lens")
   .addEdge("recruiter_lens", "tailor_resume")
-  .addEdge("tailor_resume", "critic")
-  .addConditionalEdges(
-    "critic",
-    (state: ResumeTailorStateType) => (state.done ? "end" : "retailor"),
-    { end: END, retailor: "tailor_resume" },
-  );
+  .addEdge("tailor_resume", "one_page_guard")
+  .addEdge("one_page_guard", "critic")
+  .addConditionalEdges("critic", (state: ResumeStateType) => {
+    return state.done ? "done" : "retry";
+  }, {
+    done: END,
+    retry: "tailor_resume",
+  });
 
-export const resumeTailorGraph = graphBuilder.compile();
+export const resumeTailorGraph = graph.compile();
