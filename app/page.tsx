@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { UploadZone } from "@/components/upload-zone";
+import { useState } from "react";
+import { LatexResumeInput } from "@/components/latex-resume-input";
 import { OutputPanel } from "@/components/output-panel";
 import { WorkdayUrlInput } from "@/components/workday-url-input";
 import { Button } from "@/components/ui/button";
@@ -11,19 +11,12 @@ import { Card } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
 
 export default function Home() {
-  const [resumeText, setResumeText] = useState("");
+  const [latexResume, setLatexResume] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [jobDescription, setJobDescription] = useState("");
-  const [coverLetter, setCoverLetter] = useState("");
+  const [tailoredLatex, setTailoredLatex] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const savedResume = localStorage.getItem("resume-text");
-    if (savedResume) {
-      setResumeText(savedResume);
-    }
-  }, []);
 
   const handleWorkdayDataExtracted = (data: {
     companyName: string;
@@ -33,32 +26,30 @@ export default function Home() {
     setJobDescription(data.jobDescription);
   };
 
-  //TODO: Look at this function carefully. This is where the logic is handled.
-  // Understand the data flow.
-  const handleGenerate = async () => {
-    if (!resumeText || !companyName || !jobDescription) return;
+  const handleTailor = async () => {
+    if (!latexResume || !jobDescription) return;
 
     setIsGenerating(true);
     setError(null);
 
     try {
-      const response = await fetch("/api/generate", {
+      const response = await fetch("/api/tailor-resume", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          resume: resumeText,
-          companyName,
+          latex: latexResume,
           jobDescription,
+          companyName: companyName || undefined,
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to generate content");
+        throw new Error(errorData.error || "Failed to tailor resume");
       }
 
       const data = await response.json();
-      setCoverLetter(data.coverLetter);
+      setTailoredLatex(data.tailoredLatex ?? "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -70,15 +61,15 @@ export default function Home() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Cover Letter Agent</h1>
+          <h1 className="text-3xl font-bold mb-2">Resume Tailor</h1>
           <p className="text-muted-foreground">
-            Upload your resume once, paste any job description, and generate a
-            targeted cover letter instantly.
+            Paste your LaTeX resume and job description. Get a tailored resume with
+            optimized bullet points and technical skills for the role.
           </p>
         </div>
 
         <div className="space-y-6">
-          <UploadZone onResumeExtracted={setResumeText} />
+          <LatexResumeInput value={latexResume} onChange={setLatexResume} />
 
           <Card className="p-6">
             <div className="space-y-4">
@@ -102,7 +93,8 @@ export default function Home() {
                   htmlFor="company-name"
                   className="text-sm font-medium mb-2 block"
                 >
-                  Company Name <span className="text-destructive">*</span>
+                  Company Name{" "}
+                  <span className="text-muted-foreground">(optional)</span>
                 </label>
                 <Input
                   id="company-name"
@@ -128,18 +120,20 @@ export default function Home() {
                 />
               </div>
 
-              {error && <p className="text-sm text-destructive">{error}</p>}
+              {error && (
+                <p className="text-sm text-destructive">{error}</p>
+              )}
 
               <Button
-                onClick={handleGenerate}
+                onClick={handleTailor}
                 disabled={
-                  !resumeText || !companyName || !jobDescription || isGenerating
+                  !latexResume || !jobDescription || isGenerating
                 }
                 className="w-full gap-2"
                 size="lg"
               >
                 <Sparkles className="h-5 w-5" />
-                {isGenerating ? "Generating..." : "Generate"}
+                {isGenerating ? "Tailoring..." : "Tailor Resume"}
               </Button>
             </div>
           </Card>
@@ -147,9 +141,9 @@ export default function Home() {
           <div className="grid gap-6">
             <div className="min-h-[400px]">
               <OutputPanel
-                title="Cover Letter"
-                content={coverLetter}
-                filename="cover-letter.txt"
+                title="Tailored Resume"
+                content={tailoredLatex}
+                filename="resume-tailored.tex"
               />
             </div>
           </div>
