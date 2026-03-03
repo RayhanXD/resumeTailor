@@ -31,8 +31,7 @@ export async function POST(request: NextRequest) {
           ? `${jobData.jobTitle}\n\n${jobData.jobDescription}`
           : jobData.jobDescription,
         jobTitle: jobData.jobTitle,
-        location: jobData.location,
-      }
+      },
     });
 
   } catch (error) {
