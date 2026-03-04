@@ -16,19 +16,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const finalState = await resumeTailorGraph.invoke({
-      latex,
-      jobDescription,
-      companyName,
-      companyResearch: "",
-      parsedResume: undefined as never,
-      jobAnalysis: "",
-      recruiterLens: "",
-      tailoredBullets: [],
-      tailoredSkillsValues: [],
-      critique: "",
-      done: false,
-    });
+    const finalState = await resumeTailorGraph.invoke(
+      {
+        latex,
+        jobDescription,
+        companyName,
+        companyResearch: "",
+        parsedResume: undefined as never,
+        jobAnalysis: "",
+        recruiterLens: "",
+        tailoredBullets: [],
+        tailoredSkillsValues: [],
+        critique: "",
+        done: false,
+        tailorRetryCount: 0,
+        score: 0,
+        scoreFeedback: "",
+        globalRetryCount: 0,
+      },
+      { recursionLimit: 50 },
+    );
 
     const parsed = finalState.parsedResume;
     if (!parsed) {
@@ -74,6 +81,9 @@ export async function POST(request: NextRequest) {
               critique: finalState.critique,
               jobAnalysis: finalState.jobAnalysis,
               recruiterLens: finalState.recruiterLens,
+              score: finalState.score,
+              scoreFeedback: finalState.scoreFeedback,
+              globalRetryCount: finalState.globalRetryCount,
             },
           }
         : {}),

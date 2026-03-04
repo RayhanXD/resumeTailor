@@ -16,14 +16,30 @@ function normalizeOneLine(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
+/** Escapes LaTeX-special characters so inserted content compiles (e.g. in Overleaf). */
+function escapeLatexForContent(text: string): string {
+  const BACKSLASH_PLACEHOLDER = "\uE000";
+  return text
+    .replace(/\\/g, BACKSLASH_PLACEHOLDER)
+    .replace(/%/g, "\\%")
+    .replace(/}/g, "\\}")
+    .replace(/{/g, "\\{")
+    .replace(/&/g, "\\&")
+    .replace(/#/g, "\\#")
+    .replace(/_/g, "\\_")
+    .replace(/\$/g, "\\$")
+    .replace(/\u2026/g, "\\ldots")
+    .replace(new RegExp(BACKSLASH_PLACEHOLDER, "g"), "\\textbackslash{}");
+}
+
 export function enforceOnePageHeuristic(
   bullets: string[],
-  maxCharsPerBullet = 145,
+  maxCharsPerBullet = 100,
 ): string[] {
   return bullets.map((b) => {
     const clean = normalizeOneLine(b);
     if (clean.length <= maxCharsPerBullet) return clean;
-    return clean.slice(0, maxCharsPerBullet - 1).trimEnd() + "…";
+    return clean.slice(0, maxCharsPerBullet).trimEnd();
   });
 }
 
@@ -49,12 +65,12 @@ export function reconstructLatex(
   const bulletPairs = parsed.bulletRanges.map((r, i) => ({
     start: r.start,
     end: r.end,
-    value: guardedBullets[i],
+    value: escapeLatexForContent(guardedBullets[i]),
   }));
   const skillsPairs = parsed.skillsRanges.map((r, i) => ({
     start: r.start,
     end: r.end,
-    value: normalizeOneLine(tailoredSkillsValues[i]),
+    value: escapeLatexForContent(normalizeOneLine(tailoredSkillsValues[i])),
   }));
 
   return replaceRanges(originalLatex, [...bulletPairs, ...skillsPairs]);
